@@ -10,6 +10,9 @@ if [ -s "$NVM_DIR/bash_completion" ]; then
   source "$NVM_DIR/bash_completion"
 fi
 
+autoload -Uz compinit
+compinit -i
+
 if command -v zoxide >/dev/null 2>&1; then
   eval "$(zoxide init zsh)"
 fi
