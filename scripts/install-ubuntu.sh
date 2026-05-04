@@ -38,11 +38,10 @@ sudo apt-get install -y \
   libxrandr-dev \
   libxrender-dev \
   libxtst-dev \
-  ncurses-dev \
+  libncurses-dev \
   network-manager-gnome \
   ninja-build \
   nodejs \
-  npm \
   picom \
   pkg-config \
   pulseaudio-utils \
@@ -160,6 +159,7 @@ if ! command -v uv >/dev/null 2>&1; then
 fi
 
 uv tool install ruff || uv tool upgrade ruff
+npm config set prefix "$HOME/.local"
 npm install -g yaml-language-server
 
 build_neovim
