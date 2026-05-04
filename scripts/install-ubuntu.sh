@@ -77,19 +77,19 @@ if [ -s "$NVM_DIR/nvm.sh" ]; then
   nvm alias default lts/*
 fi
 
-build_neovim() {
+install_neovim() {
   if command -v nvim >/dev/null 2>&1 && [ "${FORCE_SOURCE_BUILD:-0}" != "1" ]; then
     return
   fi
 
-  if [ ! -d "$SRC_DIR/neovim/.git" ]; then
-    git clone --filter=blob:none --branch stable https://github.com/neovim/neovim "$SRC_DIR/neovim"
-  fi
+  local url
+  url=$(curl -fsSL https://api.github.com/repos/neovim/neovim/releases/latest \
+    | python3 -c "import json,sys; r=json.load(sys.stdin); print(next(a['browser_download_url'] for a in r['assets'] if a['name'] == 'nvim-linux-x86_64.tar.gz'))")
 
-  git -C "$SRC_DIR/neovim" fetch --tags origin stable
-  git -C "$SRC_DIR/neovim" checkout stable
-  make -C "$SRC_DIR/neovim" CMAKE_BUILD_TYPE=RelWithDebInfo CMAKE_INSTALL_PREFIX="$LOCAL_PREFIX"
-  make -C "$SRC_DIR/neovim" install
+  curl -fsSL "$url" | tar -xz -C /tmp
+  cp /tmp/nvim-linux-x86_64/bin/nvim "$LOCAL_PREFIX/bin/nvim"
+  cp -r /tmp/nvim-linux-x86_64/share/nvim "$LOCAL_PREFIX/share/" 2>/dev/null || true
+  rm -rf /tmp/nvim-linux-x86_64
 }
 
 build_tmux() {
@@ -97,12 +97,18 @@ build_tmux() {
     return
   fi
 
-  if [ ! -d "$SRC_DIR/tmux/.git" ]; then
-    git clone https://github.com/tmux/tmux "$SRC_DIR/tmux"
+  local version
+  version=$(curl -fsSL https://api.github.com/repos/tmux/tmux/releases/latest \
+    | python3 -c "import json,sys; print(json.load(sys.stdin)['tag_name'])")
+
+  local src="$SRC_DIR/tmux-$version"
+  if [ ! -d "$src" ]; then
+    curl -fsSL "https://github.com/tmux/tmux/releases/download/$version/tmux-${version#v}.tar.gz" \
+      | tar -xz -C "$SRC_DIR"
+    mv "$SRC_DIR/tmux-${version#v}" "$src" 2>/dev/null || true
   fi
 
-  git -C "$SRC_DIR/tmux" pull --ff-only
-  (cd "$SRC_DIR/tmux" && sh autogen.sh && ./configure --prefix="$LOCAL_PREFIX" && make && make install)
+  (cd "$src" && ./configure --prefix="$LOCAL_PREFIX" && make && make install)
 }
 
 install_nerd_font() {
@@ -141,7 +147,11 @@ install_wezterm() {
   fi
 }
 
-cargo install --locked \
+if ! command -v cargo-binstall >/dev/null 2>&1; then
+  curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+fi
+
+cargo binstall --no-confirm \
   ripgrep \
   fd-find \
   zoxide \
@@ -162,12 +172,12 @@ uv tool install ruff || uv tool upgrade ruff
 npm config set prefix "$HOME/.local"
 npm install -g yaml-language-server
 
-build_neovim
+install_neovim
 build_tmux
 install_wezterm
 install_nerd_font
 
-"$DOTFILES_DIR/scripts/apply.sh" nvim tmux wezterm starship zsh i3
+"$DOTFILES_DIR/scripts/apply.sh" nvim tmux wezterm starship zsh i3 polybar
 
 echo
 echo "Ubuntu bootstrap complete."
