@@ -17,6 +17,34 @@ vim.opt.scrolloff = 8
 vim.opt.sidescrolloff = 8
 vim.opt.guifont = "JetBrains Mono:h14"
 
+local function apply_mise_env()
+	if vim.fn.executable("mise") == 0 then
+		return
+	end
+
+	local output = vim.fn.system({ "mise", "env", "--json", "--cd", vim.fn.getcwd() })
+	if vim.v.shell_error ~= 0 or output == "" then
+		return
+	end
+
+	local ok, env = pcall(vim.json.decode, output)
+	if not ok or type(env) ~= "table" then
+		return
+	end
+
+	for key, value in pairs(env) do
+		if type(value) == "string" then
+			vim.env[key] = value
+		end
+	end
+end
+
+apply_mise_env()
+
+vim.api.nvim_create_autocmd({ "DirChanged" }, {
+	callback = apply_mise_env,
+})
+
 vim.lsp.enable({ "basedpyright", "ruff", "yamlls" })
 
 vim.keymap.set("n", "<Space>e", vim.diagnostic.open_float)
@@ -120,6 +148,21 @@ if not vim.loop.fs_stat(lazypath) then
 end
 vim.opt.rtp:prepend(lazypath)
 
+vim.g.rustaceanvim = {
+	server = {
+		default_settings = {
+			["rust-analyzer"] = {
+				cargo = {
+					allFeatures = true,
+				},
+				check = {
+					command = "clippy",
+				},
+			},
+		},
+	},
+}
+
 require("lazy").setup({
 	{
 		"catppuccin/nvim",
@@ -142,6 +185,77 @@ require("lazy").setup({
 				default = { "lsp", "path", "snippets", "buffer" },
 			},
 		},
+	},
+	{
+		"mrcjkb/rustaceanvim",
+		branch = "main",
+		lazy = false,
+	},
+	{
+		"saecki/crates.nvim",
+		event = { "BufRead Cargo.toml" },
+		opts = {},
+	},
+	{
+		"ibhagwan/fzf-lua",
+		dependencies = { "nvim-tree/nvim-web-devicons" },
+		keys = {
+			{ "<leader>ff", function() require("fzf-lua").files() end, desc = "Find files" },
+			{ "<leader>fg", function() require("fzf-lua").live_grep() end, desc = "Live grep" },
+			{ "<leader>fb", function() require("fzf-lua").buffers() end, desc = "Find buffers" },
+			{ "<leader>fh", function() require("fzf-lua").help_tags() end, desc = "Help tags" },
+			{ "<leader>fs", function() require("fzf-lua").lsp_document_symbols() end, desc = "Find document symbols" },
+			{ "<leader>fS", function() require("fzf-lua").lsp_workspace_symbols() end, desc = "Find workspace symbols" },
+			{
+				"<leader>fr",
+				function()
+					require("fzf-lua").files({
+						cwd = vim.fn.getcwd(),
+						cmd = "rg --files exercises",
+						prompt = "Rustlings> ",
+					})
+				end,
+				desc = "Find Rustlings exercise",
+			},
+		},
+		opts = {},
+	},
+	{
+		"mfussenegger/nvim-dap",
+		keys = {
+			{ "<F5>", function() require("dap").continue() end, desc = "Debug continue" },
+			{ "<F10>", function() require("dap").step_over() end, desc = "Debug step over" },
+			{ "<F11>", function() require("dap").step_into() end, desc = "Debug step into" },
+			{ "<F12>", function() require("dap").step_out() end, desc = "Debug step out" },
+			{ "<leader>b", function() require("dap").toggle_breakpoint() end, desc = "Toggle breakpoint" },
+		},
+		config = function()
+			local dap = require("dap")
+			if vim.fn.executable("codelldb") == 1 then
+				dap.adapters.codelldb = {
+					type = "server",
+					port = "${port}",
+					executable = {
+						command = "codelldb",
+						args = { "--port", "${port}" },
+					},
+				}
+			end
+		end,
+	},
+	{
+		"nvim-treesitter/nvim-treesitter",
+		build = ":TSUpdate",
+		lazy = false,
+		config = function()
+			require("nvim-treesitter").install({ "rust", "toml" })
+			vim.api.nvim_create_autocmd("FileType", {
+				pattern = { "rust", "toml" },
+				callback = function()
+					pcall(vim.treesitter.start)
+				end,
+			})
+		end,
 	},
 	{
 		"romus204/tree-sitter-manager.nvim",
